@@ -146,6 +146,30 @@ Submit hours with a note:
 ./bamboo-hours.sh 2026-05-29 "Sprint 42"
 ```
 
+Submit hours for several days at once. The first argument accepts a
+comma-separated list, ranges (`start->end`), or a mix of both:
+
+```bash
+# Two specific days
+./bamboo-hours.sh 2026-05-29,2026-05-30 "Sprint 42"
+
+# A range (expands to all weekdays, weekends are skipped)
+./bamboo-hours.sh 2026-06-01->2026-06-05 "Sprint 42"
+
+# Combined: a range plus an extra day
+./bamboo-hours.sh 2026-06-01->2026-06-03,2026-06-08 "Sprint 42"
+
+# Several ranges (e.g. two full weeks)
+./bamboo-hours.sh 2026-06-01->2026-06-05,2026-06-08->2026-06-12 "Sprint 42"
+```
+
+Surrounding spaces are tolerated and duplicate days are removed.
+
+Weekend handling differs by token type: weekends are skipped only when
+expanding a range, so `2026-06-01->2026-06-12` fills the 10 weekdays and
+skips Saturday the 6th and Sunday the 7th. A weekend passed as a standalone
+date (e.g. `2026-06-06`) is **not** skipped and gets submitted as-is.
+
 ## Default Schedule
 
 The script submits two time blocks:

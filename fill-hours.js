@@ -2,8 +2,83 @@ require('dotenv').config();
 
 const { chromium } = require('playwright');
 
-const DATE = process.argv[2];
 const NOTE = process.argv[3] || '';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Parse a YYYY-MM-DD string as a UTC date to avoid timezone drift.
+function parseDate(str) {
+  if (!DATE_RE.test(str)) {
+    throw new Error(`Invalid date: "${str}" (expected YYYY-MM-DD)`);
+  }
+
+  const [y, m, d] = str.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() !== m - 1 ||
+    date.getUTCDate() !== d
+  ) {
+    throw new Error(`Invalid date: "${str}"`);
+  }
+
+  return date;
+}
+
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function isWeekend(date) {
+  const day = date.getUTCDay();
+  return day === 0 || day === 6;
+}
+
+// Accepts a comma-separated list of single dates and/or ranges
+// ("start->end"). Ranges expand to all weekdays in [start, end],
+// skipping weekends. Returns a deduplicated, sorted list.
+function parseDates(arg) {
+  const tokens = (arg || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const dates = new Set();
+
+  for (const token of tokens) {
+    if (token.includes('->')) {
+      const [startStr, endStr] = token.split('->').map((s) => s.trim());
+      const start = parseDate(startStr);
+      const end = parseDate(endStr);
+
+      if (start > end) {
+        throw new Error(`Range start is after end: "${token}"`);
+      }
+
+      for (
+        let d = start;
+        d <= end;
+        d = new Date(d.getTime() + 86400000)
+      ) {
+        if (!isWeekend(d)) {
+          dates.add(formatDate(d));
+        }
+      }
+    } else {
+      dates.add(formatDate(parseDate(token)));
+    }
+  }
+
+  return [...dates].sort();
+}
+
+const DATES = parseDates(process.argv[2]);
+
+if (DATES.length === 0) {
+  console.error('No dates provided');
+  process.exit(1);
+}
 
 const {
   BAMBOO_URL,
@@ -146,34 +221,34 @@ async function detectEmployeeId(page) {
 
     console.log('CSRF token detected');
 
-    const payload = {
-      entries: [
-        {
-          id: null,
-          trackingId: 1,
-          employeeId: Number(employeeId),
-          date: DATE,
-          start: MORNING_START || '09:00',
-          end: MORNING_END || '14:00',
-          note: NOTE,
-          projectId: null,
-          taskId: null,
-          breakId: null
-        },
-        {
-          id: null,
-          trackingId: 2,
-          employeeId: Number(employeeId),
-          date: DATE,
-          start: AFTERNOON_START || '15:00',
-          end: AFTERNOON_END || '18:00',
-          note: NOTE,
-          projectId: null,
-          taskId: null,
-          breakId: null
-        }
-      ]
-    };
+    const entries = DATES.flatMap((date, i) => [
+      {
+        id: null,
+        trackingId: i * 2 + 1,
+        employeeId: Number(employeeId),
+        date,
+        start: MORNING_START || '09:00',
+        end: MORNING_END || '14:00',
+        note: NOTE,
+        projectId: null,
+        taskId: null,
+        breakId: null
+      },
+      {
+        id: null,
+        trackingId: i * 2 + 2,
+        employeeId: Number(employeeId),
+        date,
+        start: AFTERNOON_START || '15:00',
+        end: AFTERNOON_END || '18:00',
+        note: NOTE,
+        projectId: null,
+        taskId: null,
+        breakId: null
+      }
+    ]);
+
+    const payload = { entries };
 
     console.log('Submitting time entries...');
 
@@ -202,7 +277,7 @@ async function detectEmployeeId(page) {
       return;
     }
 
-    console.log(`✅ Hours successfully submitted for ${DATE}`);
+    console.log(`✅ Hours successfully submitted for ${DATES.join(', ')}`);
   } catch (err) {
     console.error('\n❌ Unexpected error');
     console.error(err.message);
