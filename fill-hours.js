@@ -36,7 +36,7 @@ function isWeekend(date) {
 }
 
 // Accepts a comma-separated list of single dates and/or ranges
-// ("start->end"). Ranges expand to all weekdays in [start, end],
+// ("start:end"). Ranges expand to all weekdays in [start, end],
 // skipping weekends. Returns a deduplicated, sorted list.
 function parseDates(arg) {
   const tokens = (arg || '')
@@ -47,8 +47,8 @@ function parseDates(arg) {
   const dates = new Set();
 
   for (const token of tokens) {
-    if (token.includes('->')) {
-      const [startStr, endStr] = token.split('->').map((s) => s.trim());
+    if (token.includes(':')) {
+      const [startStr, endStr] = token.split(':').map((s) => s.trim());
       const start = parseDate(startStr);
       const end = parseDate(endStr);
 
